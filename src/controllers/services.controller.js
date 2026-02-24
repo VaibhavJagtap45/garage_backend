@@ -132,3 +132,15 @@ exports.deleteService = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// add this to services.controller.js
+/** Get current owner's services */
+exports.getMyServices = async (req, res) => {
+  try {
+    const services = await Service.find({ owner: req.user._id }).sort({ createdAt: -1 });
+    res.json(services);
+  } catch (err) {
+    console.error("getMyServices error:", err);
+    res.status(500).json({ message: "Failed to fetch your services" });
+  }
+};

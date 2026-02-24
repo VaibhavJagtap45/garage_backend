@@ -1,55 +1,35 @@
-// const router = require("express").Router();
-// const auth = require("../middlewares/auth.middleware");
-
-// const {
-//   createBooking,
-//   myBookings,
-//   rescheduleBooking,
-// } = require("../controllers/bookings.controller");
-
-// // create booking (customer)
-// router.post("/", auth, createBooking);
-
-// // get my bookings
-// router.get("/my", auth, myBookings);
-
-// // reschedule booking
-// router.put("/reschedule/:bookingId", auth, rescheduleBooking);
-
-// module.exports = router;
-
-
-
-
-
-
-
-
-
-// bookings.routes.js
 const router = require("express").Router();
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
+
 const {
   createBooking,
   myBookings,
-  rescheduleBooking,
   ownerBookings,
   cancelBooking,
+  assignMechanic,
+  completeBooking,
 } = require("../controllers/bookings.controller");
 
-// create booking (customer)
+/* CUSTOMER creates booking */
 router.post("/", auth, createBooking);
 
-// get my bookings
-// router.get("/my", auth, myBookings);
-router.get("/:id", auth, myBookings);
+/* CUSTOMER bookings */
+router.get("/my", auth, myBookings);
 
-// owner bookings (owner dashboard)
+/* OWNER bookings (service requests panel) */
 router.get("/owner", auth, role("owner"), ownerBookings);
 
-// reschedule booking (customer)
-router.put("/reschedule/:bookingId", auth, rescheduleBooking);
-// cancel booking (customer)
-router.put("/cancel/:bookingId", auth, cancelBooking);
+/* OWNER marks completed */
+// router.put("/:bookingId/complete", auth, role("owner"), completeBooking);
+
+/* CUSTOMER cancels */
+router.put("/:bookingId/cancel", auth, cancelBooking);
+// const {
+//   ,
+//   completeBooking
+// } = require("../controllers/bookings.controller");
+
+router.put("/:id/assign", auth, role("owner"), assignMechanic);
+router.put("/:id/complete", auth, role("owner"), completeBooking);
 module.exports = router;
