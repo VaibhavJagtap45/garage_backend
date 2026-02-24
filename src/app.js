@@ -146,7 +146,7 @@ app.use(
 // Proper preflight support (EXPRESS 5 FIX)
 // app.options("*", cors());
 // handle preflight requests properly (Express 5 compatible)
-app.use(cors());
+// app.use(cors());
 /* ======================================================
    BODY PARSER
 ====================================================== */
@@ -201,7 +201,8 @@ app.use("/api/transactions", require("./routes/transactions.routes"));
 
 
 // 404 handler (Express 5 safe)
-app.all("/*", (req, res) => {
+// 404 handler (Express 5 compatible — FINAL FIX)
+app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: "Route not found",
