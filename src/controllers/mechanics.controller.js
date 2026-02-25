@@ -2,53 +2,73 @@ const Mechanic = require("../models/Mechanic");
 const Booking = require("../models/Booking");
 const Inventory = require("../models/InventoryItem");
 
-
 /* =====================================================
-   ADD MECHANIC (OWNER ONLY)
+   ADD MECHANIC
 ===================================================== */
+// exports.addMechanic = async (req, res) => {
+//   try {
+//     const mechanic = await Mechanic.create({
+//       owner: req.user._id,
+//       name: req.body.name,
+//       phone: req.body.phone,
+//       skills: req.body.skills || [],
+//       experienceYears: req.body.experienceYears || 0,
+//       isAvailable: true,
+//     });
+
+//     res.status(201).json({ message: "Mechanic added successfully", mechanic });
+//   } catch (err) {
+//     console.error("addMechanic:", err);
+//     res.status(500).json({ message: err.message });
+//   }
+// };
 exports.addMechanic = async (req, res) => {
   try {
+
+    if (!req.body)
+      return res.status(400).json({ message: "No data received" });
+
+    let { name, phone, skills, experienceYears, isAvailable } = req.body;
+
+    if (!name || !phone)
+      return res.status(400).json({ message: "Name and phone are required" });
+
+    // convert skills (RN sends string sometimes)
+    if (typeof skills === "string") {
+      skills = skills.split(",").map(s => s.trim()).filter(Boolean);
+    }
+
     const mechanic = await Mechanic.create({
       owner: req.user._id,
-      name: req.body.name,
-      phone: req.body.phone,
-      skills: req.body.skills || [],
-      experienceYears: req.body.experienceYears || 0,
-      isAvailable: true,
+      name,
+      phone,
+      skills: skills || [],
+      experienceYears: Number(experienceYears) || 0,
+      isAvailable: isAvailable === "true" || isAvailable === true
     });
 
     res.status(201).json({
       message: "Mechanic added successfully",
-      mechanic,
+      mechanic
     });
+
   } catch (err) {
     console.error("addMechanic:", err);
     res.status(500).json({ message: err.message });
   }
 };
-
-
 /* =====================================================
-   GET MECHANICS (OWNER DASHBOARD + CUSTOMER VIEW)
+   GET MECHANICS
 ===================================================== */
 exports.getMechanics = async (req, res) => {
   try {
-    let query = {};
-
-    // owner sees only his mechanics
-    if (req.user.role === "owner") {
-      query.owner = req.user._id;
-    }
-
-    const mechanics = await Mechanic.find(query).sort({ createdAt: -1 });
-
+    const mechanics = await Mechanic.find({ owner: req.user._id }).sort({ createdAt: -1 });
     res.json(mechanics);
   } catch (err) {
     console.error("getMechanics:", err);
     res.status(500).json({ message: err.message });
   }
 };
-
 
 /* =====================================================
    UPDATE MECHANIC
@@ -58,28 +78,23 @@ exports.updateMechanic = async (req, res) => {
     const mechanic = await Mechanic.findById(req.params.id);
     if (!mechanic) return res.status(404).json({ message: "Mechanic not found" });
 
-    // permission check
     if (mechanic.owner.toString() !== req.user._id.toString())
-      return res.status(403).json({ message: "You cannot edit this mechanic" });
+      return res.status(403).json({ message: "Not allowed" });
 
-    mechanic.name = req.body.name ?? mechanic.name;
-    mechanic.phone = req.body.phone ?? mechanic.phone;
-    mechanic.skills = req.body.skills ?? mechanic.skills;
-    mechanic.experienceYears = req.body.experienceYears ?? mechanic.experienceYears;
-    mechanic.isAvailable = req.body.isAvailable ?? mechanic.isAvailable;
-
+    // Object.assign(mechanic, req.body);
+    if (req.body.name !== undefined) mechanic.name = req.body.name;
+if (req.body.phone !== undefined) mechanic.phone = req.body.phone;
+if (req.body.skills !== undefined) mechanic.skills = req.body.skills;
+if (req.body.experienceYears !== undefined) mechanic.experienceYears = req.body.experienceYears;
+if (req.body.isAvailable !== undefined) mechanic.isAvailable = req.body.isAvailable;
     await mechanic.save();
 
-    res.json({
-      message: "Mechanic updated successfully",
-      mechanic,
-    });
+    res.json({ message: "Mechanic updated", mechanic });
   } catch (err) {
     console.error("updateMechanic:", err);
     res.status(500).json({ message: err.message });
   }
 };
-
 
 /* =====================================================
    DELETE MECHANIC
@@ -89,78 +104,57 @@ exports.deleteMechanic = async (req, res) => {
     const mechanic = await Mechanic.findById(req.params.id);
     if (!mechanic) return res.status(404).json({ message: "Mechanic not found" });
 
-    // permission check
     if (mechanic.owner.toString() !== req.user._id.toString())
-      return res.status(403).json({ message: "You cannot delete this mechanic" });
+      return res.status(403).json({ message: "Not allowed" });
 
-    // check if assigned in active booking
-    const activeBooking = await Booking.findOne({
+    const active = await Booking.findOne({
       mechanic: mechanic._id,
-      status: { $in: ["assigned", "accepted", "in_progress"] },
+      status: { $in: ["assigned", "in_progress"] },
     });
 
-    if (activeBooking)
-      return res.status(400).json({
-        message: "Cannot delete mechanic. Assigned to an active booking",
-      });
+    if (active)
+      return res.status(400).json({ message: "Mechanic currently working on a job" });
 
     await mechanic.deleteOne();
-
-    res.json({ message: "Mechanic deleted successfully" });
+    res.json({ message: "Mechanic deleted" });
   } catch (err) {
     console.error("deleteMechanic:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-
 /* =====================================================
-   ASSIGN MECHANIC TO BOOKING + RESERVE PARTS
+   ASSIGN MECHANIC
 ===================================================== */
 exports.assignMechanic = async (req, res) => {
   try {
-    const { bookingId } = req.params;
-    const { mechanicId, parts = [] } = req.body;
 
-    const booking = await Booking.findById(bookingId).populate("service");
-    if (!booking) return res.status(404).json({ message: "Booking not found" });
-
-    // ensure owner owns service
-    if (!booking.service || booking.service.owner.toString() !== req.user._id.toString())
-      return res.status(403).json({ message: "This booking is not yours" });
-
-    const mechanic = await Mechanic.findById(mechanicId);
-    if (!mechanic || mechanic.owner.toString() !== req.user._id.toString())
-      return res.status(400).json({ message: "Invalid mechanic selected" });
-
-    // reserve inventory parts
-    const reservedParts = [];
-    for (const p of parts) {
-      const item = await Inventory.findOneAndUpdate(
-        {
-          _id: p.itemId,
-          owner: req.user._id,
-          $expr: { $gte: [{ $subtract: ["$quantity", "$reservedQty"] }, p.qty] },
-        },
-        { $inc: { reservedQty: p.qty } },
-        { new: true }
-      );
-
-      if (!item) {
-        // rollback previous reservations
-        for (const r of reservedParts) {
-          await Inventory.findByIdAndUpdate(r.itemId, {
-            $inc: { reservedQty: -r.qty },
-          });
-        }
-        return res.status(400).json({ message: "Insufficient stock", itemId: p.itemId });
-      }
-
-      reservedParts.push({ itemId: p.itemId, qty: p.qty });
+    // SAFE BODY CHECK
+    if (!req.body || !req.body.mechanicId) {
+      return res.status(400).json({
+        message: "mechanicId is required"
+      });
     }
 
-    booking.mechanic = mechanicId;
-    booking.parts = reservedParts;
+    const bookingId = req.params.bookingId;
+    const mechanicId = req.body.mechanicId;
+
+    const booking = await Booking.findById(bookingId).populate("service");
+    if (!booking)
+      return res.status(404).json({ message: "Booking not found" });
+
+    // owner check
+    if (!booking.service || booking.service.owner.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: "Not your booking" });
+
+    const mechanic = await Mechanic.findById(mechanicId);
+    if (!mechanic)
+      return res.status(400).json({ message: "Mechanic not found" });
+
+    if (mechanic.owner.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: "Mechanic does not belong to you" });
+
+    booking.mechanic = mechanic._id;
     booking.status = "assigned";
     booking.assignedAt = new Date();
 
@@ -168,29 +162,59 @@ exports.assignMechanic = async (req, res) => {
 
     res.json({
       message: "Mechanic assigned successfully",
-      booking,
+      booking
     });
+
   } catch (err) {
     console.error("assignMechanic:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
+/* =====================================================
+   UNASSIGN MECHANIC
+===================================================== */
+exports.unassignMechanic = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+
+    const booking = await Booking.findById(bookingId).populate("service");
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+    if (!booking.service || booking.service.owner.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: "Not your booking" });
+
+    booking.mechanic = null;
+    booking.parts = [];
+    booking.status = "accepted";
+    booking.assignedAt = null;
+
+    await booking.save();
+
+    res.json({ message: "Mechanic unassigned", booking });
+  } catch (err) {
+    console.error("unassignMechanic:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
 
 /* =====================================================
-   START JOB
+   START WORK (NO PAYMENT CHECK)
 ===================================================== */
 exports.startJob = async (req, res) => {
   try {
-    const booking = await Booking.findById(req.params.bookingId);
-    // if (!booking) return res.status(404).json({ message: "Booking not found" });
-if (booking.paymentStatus !== "paid")
-  return res.status(400).json({ message: "Customer has not paid yet" });
-    if (booking.status !== "assigned")
-      return res.status(400).json({ message: "Booking must be assigned first" });
+    const booking = await Booking.findById(req.params.bookingId).populate("service");
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+    if (!booking.service || booking.service.owner.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: "Not your booking" });
+
+    if (!booking.mechanic)
+      return res.status(400).json({ message: "Assign mechanic first" });
 
     booking.status = "in_progress";
     booking.startedAt = new Date();
+
     await booking.save();
 
     res.json({ message: "Work started", booking });
@@ -200,36 +224,47 @@ if (booking.paymentStatus !== "paid")
   }
 };
 
-
 /* =====================================================
-   COMPLETE JOB (DEDUCT INVENTORY)
+   COMPLETE JOB
 ===================================================== */
 exports.completeJob = async (req, res) => {
   try {
-    const booking = await Booking.findById(req.params.bookingId);
+    const booking = await Booking.findById(req.params.bookingId).populate("service");
     if (!booking) return res.status(404).json({ message: "Booking not found" });
 
-    if (booking.status !== "in_progress")
-      return res.status(400).json({ message: "Job has not started yet" });
+    if (!booking.service || booking.service.owner.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: "Not your booking" });
 
-    // deduct reserved parts
-    for (const p of booking.parts || []) {
-      await Inventory.findByIdAndUpdate(
-        p.itemId,
-        { $inc: { quantity: -p.qty, reservedQty: -p.qty } }
-      );
-    }
+    if (booking.status !== "in_progress")
+      return res.status(400).json({ message: "Job not started" });
 
     booking.status = "completed";
     booking.completedAt = new Date();
+
     await booking.save();
 
-    res.json({
-      message: "Job completed successfully",
-      booking,
-    });
+    res.json({ message: "Job completed", booking });
   } catch (err) {
     console.error("completeJob:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* =====================================================
+   CUSTOMER VIEW MECHANIC
+===================================================== */
+exports.getMechanicByBooking = async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.bookingId).populate("mechanic");
+
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+    if (!booking.mechanic)
+      return res.status(404).json({ message: "No mechanic assigned yet" });
+
+    res.json({ mechanic: booking.mechanic });
+  } catch (err) {
+    console.error("getMechanicByBooking:", err);
     res.status(500).json({ message: err.message });
   }
 };

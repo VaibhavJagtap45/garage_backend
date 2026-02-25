@@ -1,74 +1,81 @@
-// // upload.middleware.js
-// const multer = require("multer");
-// const path = require("path");
-// const fs = require("fs");
-
-// // ensure upload folder exists
-// const uploadPath = path.join(__dirname, "..", "uploads");
-// if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
-
-// const storage = multer.diskStorage({
-//   destination: (req, file, cb) => {
-//     cb(null, uploadPath);
-//   },
-//   filename: (req, file, cb) => {
-//     const unique = Date.now() + path.extname(file.originalname);
-//     cb(null, unique);
-//   },
-// });
-
-// const upload = multer({
-//   storage,
-//   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-// });
-
-// module.exports = upload;
-
-
-
-
-
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-/* ================== CREATE AVATAR FOLDER ================== */
+/* =====================================================
+   CREATE FOLDERS
+===================================================== */
 
-const avatarPath = path.join(__dirname, "..", "uploads", "avatars");
+const baseUpload = path.join(__dirname, "..", "uploads");
+const avatarPath = path.join(baseUpload, "avatars");
+const partsPath = path.join(baseUpload, "parts");
+const bikesPath = path.join(baseUpload, "bikes");
 
-if (!fs.existsSync(avatarPath)) {
-  fs.mkdirSync(avatarPath, { recursive: true });
-}
+[baseUpload, avatarPath, partsPath, bikesPath].forEach((dir) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
 
-/* ================== STORAGE ================== */
+/* =====================================================
+   DYNAMIC STORAGE (VERY IMPORTANT)
+===================================================== */
 
 const storage = multer.diskStorage({
+
   destination: (req, file, cb) => {
-    cb(null, avatarPath);
+
+    // Decide folder based on route
+    if (req.originalUrl.includes("inventory")) {
+      // inventory item image
+      return cb(null, partsPath);
+    }
+
+    if (req.originalUrl.includes("bike")) {
+      // bike image (future)
+      return cb(null, bikesPath);
+    }
+
+    // default: avatar
+    return cb(null, avatarPath);
   },
 
   filename: (req, file, cb) => {
-    // safer filename
+
     const ext = path.extname(file.originalname || ".jpg");
 
+    let prefix = "file";
+
+    if (req.originalUrl.includes("inventory")) prefix = "part";
+    else if (req.originalUrl.includes("bike")) prefix = "bike";
+    else prefix = "avatar";
+
     const uniqueName =
-      "avatar_" + req.user._id + "_" + Date.now() + ext;
+      prefix +
+      "_" +
+      (req.user?._id || "guest") +
+      "_" +
+      Date.now() +
+      ext;
 
     cb(null, uniqueName);
   },
 });
 
-/* ================== FILE FILTER ================== */
+/* =====================================================
+   FILTER
+===================================================== */
 
 const fileFilter = (req, file, cb) => {
-  // allow only images
   if (!file.mimetype.startsWith("image/")) {
     return cb(new Error("Only image files allowed"), false);
   }
   cb(null, true);
 };
 
-/* ================== EXPORT ================== */
+/* =====================================================
+   EXPORT
+===================================================== */
 
 const upload = multer({
   storage,
@@ -76,4 +83,22 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
-module.exports = upload;
+// module.exports = upload;
+/* =====================================================
+   TWO TYPES OF MULTER
+===================================================== */
+
+// For image uploads (avatar, inventory, bike)
+const uploadFields = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+// For normal multipart form-data WITHOUT files (React Native forms)
+const uploadForm = multer(); // memory parser only for text fields
+
+module.exports = {
+  uploadFields,
+  uploadForm,
+};

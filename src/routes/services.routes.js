@@ -1,37 +1,7 @@
-// const router = require("express").Router();
-// const auth = require("../middlewares/auth.middleware");
-// const role = require("../middlewares/role.middleware");
-// const upload = require("../middlewares/upload.middleware");
-
-// const {
-//   createService,
-//   getServices,
-//   getService,
-// } = require("../controllers/services.controller");
-
-// // public
-// router.get("/", getServices);
-// router.get("/:id", getService);
-
-// // owner only
-// router.post("/", auth, role("owner"), upload.single("image"), createService);
-
-// module.exports = router;
-
-
-
-
-
-
-
-
-
-
-
-const router = require("express").Router();
+ router = require("express").Router();
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
-const upload = require("../middlewares/upload.middleware");
+const {uploadFields} = require("../middlewares/upload.middleware");
 
 const {
   createService,
@@ -54,8 +24,8 @@ router.get("/", getServices);
 router.get("/:id", getService);
 
 /* ---------------- OWNER CRUD ---------------- */
-router.post("/", auth, role("owner"), upload.single("image"), createService);
-router.put("/:id", auth, role("owner"), upload.single("image"), updateService);
+router.post("/", auth, role("owner"), uploadFields.single("image"), createService);
+router.put("/:id", auth, role("owner"), uploadFields.single("image"), updateService);
 router.delete("/:id", auth, role("owner"), deleteService);
 
 module.exports = router;

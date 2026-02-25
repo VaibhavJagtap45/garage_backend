@@ -6,30 +6,56 @@ const {
   createBooking,
   myBookings,
   ownerBookings,
+  acceptBooking,
+  rejectBooking,
   cancelBooking,
-  assignMechanic,
   completeBooking,
 } = require("../controllers/bookings.controller");
 
-/* CUSTOMER creates booking */
+/* ================= CUSTOMER ================= */
+
+// create booking
 router.post("/", auth, createBooking);
 
-/* CUSTOMER bookings */
+// customer bookings
 router.get("/my", auth, myBookings);
 
-/* OWNER bookings (service requests panel) */
+// cancel booking
+router.put("/:bookingId/cancel", auth, cancelBooking);
+
+/* ================= OWNER ================= */
+
+// owner dashboard bookings
 router.get("/owner", auth, role("owner"), ownerBookings);
 
-/* OWNER marks completed */
-// router.put("/:bookingId/complete", auth, role("owner"), completeBooking);
+// accept booking
+router.put("/accept/:bookingId", auth, role("owner"), acceptBooking);
 
-/* CUSTOMER cancels */
-router.put("/:bookingId/cancel", auth, cancelBooking);
-// const {
-//   ,
-//   completeBooking
-// } = require("../controllers/bookings.controller");
+// reject booking
+router.put("/reject/:bookingId", auth, role("owner"), rejectBooking);
 
-router.put("/:id/assign", auth, role("owner"), assignMechanic);
-router.put("/:id/complete", auth, role("owner"), completeBooking);
+// (optional) manual complete booking
+router.put("/complete/:bookingId", auth, role("owner"), completeBooking);
+
+router.put("/:bookingId/pay", auth, async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.bookingId);
+
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+    if (booking.customer.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: "Not your booking" });
+
+    if (booking.paymentStatus === "paid")
+      return res.status(400).json({ message: "Already paid" });
+
+    booking.paymentStatus = "paid";
+    await booking.save();
+
+    res.json({ message: "Payment successful" });
+  } catch (err) {
+    console.error("payBooking:", err);
+    res.status(500).json({ message: err.message });
+  }
+});
 module.exports = router;

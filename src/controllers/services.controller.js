@@ -1,35 +1,3 @@
-// const Service = require("../models/Service");
-
-// // CREATE
-// exports.createService = async (req, res) => {
-//   try {
-//     const service = await Service.create({
-//       ...req.body,
-//       image: req.file?.filename,
-//       owner: req.user._id,
-//     });
-
-//     res.json(service);
-//   } catch (err) {
-//     res.status(500).json(err);
-//   }
-// };
-
-// // GET ALL
-// exports.getServices = async (req, res) => {
-//   const services = await Service.find().populate("owner", "name phone");
-//   res.json(services);
-// };
-
-// // GET ONE
-// exports.getService = async (req, res) => {
-//   const service = await Service.findById(req.params.id);
-//   res.json(service);
-// };
-
-
-
-
 
 // services.controller.js
 const Service = require("../models/Service");

@@ -1,53 +1,3 @@
-// const mongoose = require("mongoose");
-
-// const bookingSchema = new mongoose.Schema(
-//   {
-//     customer: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-//     service: { type: mongoose.Schema.Types.ObjectId, ref: "Service" },
-//     mechanic: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-
-//     scheduledDate: Date,
-
-//   status: {
-//   type: String,
-//   enum: [
-//     "pending",          // customer created
-//     "assigned",         // owner assigned mechanic
-//     "accepted",         // mechanic accepted
-//     "in_progress",      // mechanic started
-//     "completed",        // finished
-//     "cancelled"
-//   ],
-//   default: "pending",
-// },
-//     rescheduledCount: {
-//   type: Number,
-//   default: 0,
-// },
-
-//     totalPrice: Number,
-//     notes: String,
-//   },
-// //   assignedAt: Date,
-// // startedAt: Date,
-// // completedAt: Date,
-//   { timestamps: true }
-// );
-
-// module.exports = mongoose.model("Booking", bookingSchema);
-
-
-
-
-
-
-
-
-
-
-
-
-
 const mongoose = require("mongoose");
 
 const bookingSchema = new mongoose.Schema(
@@ -58,12 +8,24 @@ const bookingSchema = new mongoose.Schema(
 
     scheduledDate: { type: Date, required: true },
 
-    status: {
-      type: String,
-      enum: ["pending","assigned","in_progress","completed","cancelled"],
-      default: "pending",
-    },
-
+    // status: {
+    //   type: String,
+    //   enum: ["pending","assigned","in_progress","completed","cancelled"],
+    //   default: "pending",
+    // },
+status: {
+  type: String,
+  enum: [
+    "pending",      // customer created
+    "accepted",     // owner accepted
+    "rejected",     // owner rejected
+    "assigned",     // mechanic assigned
+    "in_progress",  // mechanic started job
+    "completed",    // work finished
+    "cancelled"     // customer cancelled
+  ],
+  default: "pending",
+},
     /* ---------- PRICE ---------- */
    totalPrice: Number,
 discount: { type: Number, default: 0 },
