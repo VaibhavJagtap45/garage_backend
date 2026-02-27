@@ -6,11 +6,18 @@ const Service = require("../models/Service");
 ========================================== */
 exports.createBooking = async (req, res) => {
   try {
+    const { serviceId, scheduledDate, address } = req.body;
+
+    // Get service to fetch price
+    const service = await Service.findById(serviceId);
+    if (!service) return res.status(404).json({ message: "Service not found" });
+
     const booking = await Booking.create({
       customer: req.user._id,
-      service: req.body.serviceId,
-      address: req.body.address,
-      scheduledDate: req.body.scheduledDate,
+      service: serviceId,
+      scheduledDate,
+      address, // now stored
+      totalPrice: service.price, // ✅ set price
       status: "pending",
     });
 
@@ -38,11 +45,12 @@ exports.myBookings = async (req, res) => {
   }
 };
 
-
+/* ==========================================
+   OWNER BOOKINGS (all bookings for owner's services)
+========================================== */
 exports.ownerBookings = async (req, res) => {
   try {
     const services = await Service.find({ owner: req.user._id }).select("_id");
-
     const serviceIds = services.map((s) => s._id);
 
     const bookings = await Booking.find({ service: { $in: serviceIds } })
@@ -57,6 +65,7 @@ exports.ownerBookings = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 /* ==========================================
    ACCEPT BOOKING (OWNER)
 ========================================== */
@@ -102,27 +111,8 @@ exports.rejectBooking = async (req, res) => {
 };
 
 /* ==========================================
-   CUSTOMER CANCEL
+   CUSTOMER CANCEL BOOKING
 ========================================== */
-// exports.cancelBooking = async (req, res) => {
-//   try {
-//     const booking = await Booking.findById(req.params.bookingId);
-
-//     if (!booking) return res.status(404).json({ message: "Booking not found" });
-
-//     if (booking.customer.toString() !== req.user._id.toString())
-//       return res.status(403).json({ message: "Not your booking" });
-
-//     booking.status = "cancelled";
-//     await booking.save();
-
-//     res.json({ message: "Booking cancelled" });
-//   } catch (err) {
-//     console.error("cancelBooking:", err);
-//     res.status(500).json({ message: err.message });
-//   }
-// };
-
 exports.cancelBooking = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.bookingId);
@@ -132,7 +122,7 @@ exports.cancelBooking = async (req, res) => {
     if (booking.customer.toString() !== req.user._id.toString())
       return res.status(403).json({ message: "Not your booking" });
 
-    // cannot cancel after accepted
+    // Cannot cancel after assigned/in_progress
     if (["assigned", "in_progress", "completed"].includes(booking.status)) {
       return res.status(400).json({
         message: "Service already scheduled. Contact garage to cancel.",
@@ -148,6 +138,7 @@ exports.cancelBooking = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 /* ==========================================
    COMPLETE BOOKING (OWNER OPTIONAL)
 ========================================== */

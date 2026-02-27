@@ -1,24 +1,56 @@
-// in src/routes/users.routes.js (or controller file)
-const router = require("express").Router();
-const auth = require("../middlewares/auth.middleware");
 const User = require("../models/User");
+const Mechanic = require("../models/Mechanic");
+const fs = require("fs");
+const path = require("path");
 
-// GET PROFILE (already present)
-router.get("/me", auth, async (req, res) => {
-  res.json(req.user);
-});
-
-/**
- * UPDATE PROFILE
- * - customer: can update name, phone, avatar, address
- * - owner: can update name, phone, avatar, garageName, garageAddress, openingHours, offersDoorstep, serviceAreaKm
- */
-router.put("/me", auth, upload.single("avatar"), async (req, res) => {
+/* Helper to get local file path from avatar URL */
+function getLocalFilePathFromAvatar(avatar) {
+  if (!avatar) return null;
   try {
+    if (avatar.startsWith("http://") || avatar.startsWith("https://")) {
+      const u = new URL(avatar);
+      avatar = u.pathname;
+    }
+  } catch (e) {}
+  if (avatar.startsWith("/")) avatar = avatar.slice(1);
+  if (!avatar.startsWith("uploads/")) return null;
+  return path.join(__dirname, "..", "..", avatar);
+}
 
-    const updates = {};
+/* =========================================================
+   GET PROFILE
+========================================================= */
+exports.getProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json(user);
+  } catch (err) {
+    console.error("GET PROFILE ERROR:", err);
+    res.status(500).json({ message: "Failed to fetch profile" });
+  }
+};
 
-    /* ================= ALLOWED FIELDS ================= */
+/* =========================================================
+   GET MECHANICS (OWNER ONLY)
+========================================================= */
+exports.getMechanics = async (req, res) => {
+  try {
+    const mechanics = await Mechanic.find({ owner: req.user._id })
+      .populate("user", "name phone email avatar");
+    res.json(mechanics);
+  } catch (err) {
+    console.error("GET MECHANICS ERROR:", err);
+    res.status(500).json({ message: "Failed to fetch mechanics" });
+  }
+};
+
+/* =========================================================
+   UPDATE PROFILE
+========================================================= */
+exports.updateProfile = async (req, res) => {
+  try {
+    console.log("UPDATE PROFILE CONTROLLER HIT");
 
     const allowedCustomer = ["name", "phone", "address"];
     const allowedOwner = [
@@ -32,33 +64,45 @@ router.put("/me", auth, upload.single("avatar"), async (req, res) => {
 
     const allowedFields = req.user.role === "owner" ? allowedOwner : allowedCustomer;
 
-    // Copy allowed text fields
-    for (const key of Object.keys(req.body)) {
+    const updates = {};
+
+    // ✅ Ensure req.body is a plain object before using it
+    const body = (req.body && typeof req.body === "object" && !Array.isArray(req.body)) ? req.body : {};
+
+    // Copy allowed fields safely
+    for (const key of Object.keys(body)) {
       if (allowedFields.includes(key)) {
-        updates[key] = req.body[key];
+        updates[key] = body[key];
       }
     }
 
-    /* ================= AVATAR IMAGE ================= */
-
-    if (req.file) {
-      // create correct URL
-      const SERVER_URL = process.env.SERVER_URL || "http://localhost:5000";
-      updates.avatar = `${SERVER_URL}/uploads/avatars/${req.file.filename}`;
+    // Avatar handling – check for empty string explicitly (no hasOwnProperty needed)
+    if (body.avatar === "") {
+      const oldPath = getLocalFilePathFromAvatar(req.user.avatar);
+      if (oldPath && fs.existsSync(oldPath)) {
+        try { fs.unlinkSync(oldPath); } catch {}
+      }
+      updates.avatar = null;
     }
 
-    /* ================= ADDRESS NORMALIZATION ================= */
+    // If a new file was uploaded, it takes precedence
+    if (req.file) {
+      if (req.user.avatar) {
+        const oldPath = getLocalFilePathFromAvatar(req.user.avatar);
+        if (oldPath && fs.existsSync(oldPath)) {
+          try { fs.unlinkSync(oldPath); } catch {}
+        }
+      }
+      updates.avatar = `/uploads/avatars/${req.file.filename}`;
+    }
 
+    // Address normalization
     const normalizeAddress = (addr) => {
       if (!addr) return addr;
-
-      // If stringified JSON from React Native
       if (typeof addr === "string") {
-        try { addr = JSON.parse(addr); }
-        catch { return addr; }
+        try { addr = JSON.parse(addr); } catch { return addr; }
       }
-
-      if (addr.location && addr.location.lat && addr.location.lng) {
+      if (addr?.location?.lat && addr?.location?.lng) {
         addr.location = {
           type: "Point",
           coordinates: [
@@ -67,19 +111,11 @@ router.put("/me", auth, upload.single("avatar"), async (req, res) => {
           ],
         };
       }
-
       return addr;
     };
 
-    if (updates.garageAddress) {
-      updates.garageAddress = normalizeAddress(updates.garageAddress);
-    }
-
-    if (updates.address) {
-      updates.address = normalizeAddress(updates.address);
-    }
-
-    /* ================= SAVE ================= */
+    if (updates.garageAddress) updates.garageAddress = normalizeAddress(updates.garageAddress);
+    if (updates.address) updates.address = normalizeAddress(updates.address);
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
@@ -88,11 +124,8 @@ router.put("/me", auth, upload.single("avatar"), async (req, res) => {
     ).select("-password");
 
     res.json(user);
-
   } catch (err) {
-    console.error("Update profile error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("UPDATE PROFILE ERROR:", err);
+    res.status(500).json({ message: "Server error" });
   }
-});
-
-module.exports = router;
+};

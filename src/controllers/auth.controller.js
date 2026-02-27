@@ -1,73 +1,83 @@
-
-// auth.controller.js
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const Mechanic = require("../models/Mechanic");
 
-/**
- * Register - always create as customer (prevent client-side role escalation)
- */
+/* ================= REGISTER ================= */
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, phone, role } = req.body;
+    let { name, email, password, role, phone } = req.body;
 
-    const exists = await User.findOne({ email });
-    if (exists) return res.status(400).json({ message: "Email already registered" });
+    if (!name || !email || !password)
+      return res.status(400).json({ message: "Missing required fields" });
 
-    const hash = await bcrypt.hash(password, 10);
+    email = email.trim().toLowerCase();
 
-    // 🔐 allow only customer or owner
-    let userRole = "customer"; // default
+    // Normalize phone: remove all non-digits
+    if (phone) phone = phone.replace(/\D/g, "");
 
-    if (role === "owner") {
-      userRole = "owner";
-    }
+    // Check duplicate email
+    const existing = await User.findOne({ email });
+    if (existing)
+      return res.status(400).json({ message: "Email already registered" });
 
+    const hashed = await bcrypt.hash(password, 10);
+
+    // Create user
     const user = await User.create({
       name,
       email,
-      password: hash,
+      password: hashed,
+      role: role || "customer",
       phone,
-      role: userRole,
     });
 
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    // Auto-link mechanic if role is mechanic and phone exists
+    if (user.role === "mechanic" && phone) {
+      // Find mechanic with exact normalized phone
+      const mechanic = await Mechanic.findOne({ phone: phone });
+      if (mechanic) {
+        mechanic.user = user._id;
+        mechanic.isAvailable = true;
+        await mechanic.save();
+        console.log("✅ Mechanic auto-linked:", mechanic.name);
+      } else {
+        console.log("⚠ Mechanic registered but no owner profile exists yet");
+      }
+    }
 
     res.status(201).json({
-      message: "User registered",
-      user: { ...user.toObject(), password: undefined },
-      token,
+      success: true,
+      message: "User registered successfully",
     });
-
   } catch (err) {
-    console.error("Auth register error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("REGISTER ERROR:", err);
+    res.status(500).json({ message: "Registration failed" });
   }
 };
-/**
- * Login
- */
+
+/* ================= LOGIN ================= */
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "Invalid email or password" });
+    const user = await User.findOne({ email }).select("+password"); // include password for comparison
+    if (!user) return res.status(400).json({ message: "Invalid credentials" });
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(400).json({ message: "Invalid email or password" });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: "7d",
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "30d",
     });
 
-    res.json({ token, user: { ...user.toObject(), password: undefined } });
+    // Remove password from response
+    const safeUser = user.toObject();
+    delete safeUser.password;
+
+    res.json({ token, user: safeUser });
   } catch (err) {
-    console.error("Auth login error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ message: "Login failed" });
   }
 };

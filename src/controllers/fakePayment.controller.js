@@ -7,23 +7,21 @@ exports.payBooking = async (req, res) => {
     const { bookingId, method } = req.body;
 
     const booking = await Booking.findById(bookingId).populate("service");
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
 
-    if (!booking)
-      return res.status(404).json({ message: "Booking not found" });
-
-    // only customer can pay
+    // Only customer can pay
     if (booking.customer.toString() !== req.user._id.toString())
       return res.status(403).json({ message: "Unauthorized" });
 
     if (booking.paymentStatus === "paid")
       return res.status(400).json({ message: "Already paid" });
 
-    const service = await Service.findById(booking.service);
+    const service = await Service.findById(booking.service); // already populated, but safe
     const ownerId = service.owner;
 
     const amount = booking.finalPrice || booking.totalPrice;
 
-    // ⭐ CREATE TRANSACTION WITH OWNER
+    // Create transaction with owner
     const transaction = await FakeTransaction.create({
       booking: booking._id,
       user: req.user._id,

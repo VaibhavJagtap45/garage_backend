@@ -20,9 +20,9 @@ const locationSchema = new mongoose.Schema(
 const userSchema = new mongoose.Schema(
   {
     name: String,
-    email: { type: String, unique: true },
-    password: String,
-    phone: String,
+    email: { type: String, unique: true, trim: true },
+    password: { type: String, trim: true, select: false }, // 👈 hide by default
+    phone: { type: String, trim: true },
 
     role: {
       type: String,
@@ -30,17 +30,15 @@ const userSchema = new mongoose.Schema(
       default: "customer",
     },
 
-    avatar: {
-  type: String,
-  default: null,
-},
+    avatar: { type: String, default: null },
+
     /* ---------- CUSTOMER ADDRESS (OPTIONAL) ---------- */
     address: {
       formattedAddress: String,
       placeId: String,
       location: {
         type: locationSchema,
-        default: undefined,   // ⭐ IMPORTANT (prevents crash)
+        default: undefined,
       },
     },
 
@@ -52,7 +50,7 @@ const userSchema = new mongoose.Schema(
       placeId: String,
       location: {
         type: locationSchema,
-        default: undefined,   // ⭐ VERY IMPORTANT
+        default: undefined,
       },
     },
 
@@ -64,9 +62,9 @@ const userSchema = new mongoose.Schema(
 );
 
 /* ---------- 2DSPHERE INDEX ---------- */
-userSchema.index(
-  { "garageAddress.location": "2dsphere" },
-  { sparse: true } // ⭐ prevents Mongo crash when location absent
-);
+userSchema.index({ "garageAddress.location": "2dsphere" }, { sparse: true });
+
+// Ensure email is indexed (already unique)
+userSchema.index({ email: 1 });
 
 module.exports = mongoose.model("User", userSchema);

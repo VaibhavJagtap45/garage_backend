@@ -1,5 +1,3 @@
-
-// services.controller.js
 const Service = require("../models/Service");
 
 /** Create service (owner) */
@@ -53,10 +51,8 @@ exports.updateService = async (req, res) => {
   try {
     const service = await Service.findById(req.params.id);
 
-    if (!service)
-      return res.status(404).json({ message: "Service not found" });
+    if (!service) return res.status(404).json({ message: "Service not found" });
 
-    // only owner can edit
     if (service.owner.toString() !== req.user._id.toString())
       return res.status(403).json({ message: "You are not allowed to edit this service" });
 
@@ -67,11 +63,9 @@ exports.updateService = async (req, res) => {
     if (price !== undefined) service.price = Number(price);
     if (durationMinutes !== undefined) service.durationMinutes = Number(durationMinutes);
 
-    // new image uploaded
     if (req.file) service.image = req.file.filename;
 
     await service.save();
-
     res.json({ message: "Service updated successfully", service });
   } catch (err) {
     console.error("updateService error:", err);
@@ -79,21 +73,17 @@ exports.updateService = async (req, res) => {
   }
 };
 
-
 /** DELETE SERVICE (owner only) */
 exports.deleteService = async (req, res) => {
   try {
     const service = await Service.findById(req.params.id);
 
-    if (!service)
-      return res.status(404).json({ message: "Service not found" });
+    if (!service) return res.status(404).json({ message: "Service not found" });
 
-    // owner check
     if (service.owner.toString() !== req.user._id.toString())
       return res.status(403).json({ message: "You are not allowed to delete this service" });
 
     await service.deleteOne();
-
     res.json({ message: "Service deleted successfully" });
   } catch (err) {
     console.error("deleteService error:", err);
@@ -101,7 +91,6 @@ exports.deleteService = async (req, res) => {
   }
 };
 
-// add this to services.controller.js
 /** Get current owner's services */
 exports.getMyServices = async (req, res) => {
   try {

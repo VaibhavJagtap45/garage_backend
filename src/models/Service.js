@@ -17,4 +17,7 @@ const serviceSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Index for owner queries
+serviceSchema.index({ owner: 1 });
+
 module.exports = mongoose.model("Service", serviceSchema);

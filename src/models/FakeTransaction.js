@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const fakeTransactionSchema = new mongoose.Schema(
+const FakeTransactionSchema = new mongoose.Schema(
   {
     booking: {
       type: mongoose.Schema.Types.ObjectId,
@@ -14,7 +14,6 @@ const fakeTransactionSchema = new mongoose.Schema(
       required: true,
     },
 
-    // ⭐ ADD THIS
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -46,4 +45,7 @@ const fakeTransactionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model("FakeTransaction", fakeTransactionSchema);
+// Index for owner transaction listing
+FakeTransactionSchema.index({ owner: 1, createdAt: -1 });
+
+module.exports = mongoose.model("FakeTransaction", FakeTransactionSchema);

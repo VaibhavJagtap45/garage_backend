@@ -62,8 +62,8 @@ const couponSchema = new mongoose.Schema(
       default: "general",
     },
 
-   validFrom: { type: Date, required: true },
-validTill: { type: Date, required: true },
+    validFrom: { type: Date, required: true },
+    validTill: { type: Date, required: true },
 
     isActive: {
       type: Boolean,
@@ -72,5 +72,14 @@ validTill: { type: Date, required: true },
   },
   { timestamps: true }
 );
+
+// Ensure validTill >= validFrom (optional application-level check)
+couponSchema.pre("save", function (next) {
+  if (this.validTill < this.validFrom) {
+    next(new Error("validTill must be after validFrom"));
+  } else {
+    next();
+  }
+});
 
 module.exports = mongoose.model("Coupon", couponSchema);

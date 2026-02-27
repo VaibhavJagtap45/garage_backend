@@ -18,4 +18,7 @@ const couponUsageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// ✅ UNIQUE INDEX to prevent duplicate usage by same user on same coupon
+couponUsageSchema.index({ coupon: 1, user: 1 }, { unique: true });
+
 module.exports = mongoose.model("CouponUsage", couponUsageSchema);

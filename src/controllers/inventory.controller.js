@@ -1,259 +1,244 @@
 const fs = require("fs");
 const path = require("path");
 const Inventory = require("../models/InventoryItem");
+const Mechanic = require("../models/Mechanic");
 
-const UPLOAD_DIR = path.join(__dirname, "..", "uploads");
-const SERVER_URL = process.env.SERVER_URL || "http://localhost:5000"; // set in env
+const UPLOAD_DIR = path.join(__dirname, "..", "..", "uploads");
+const SERVER_URL = process.env.SERVER_URL || "http://localhost:5000";
 
-
+/* ======================================================
+   ADD INVENTORY ITEM (OWNER)
+====================================================== */
 exports.addItem = async (req, res) => {
   try {
-    // ---------- IMAGE HANDLING ----------
-    let imageUrl = null;
+    // RN FormData fix
+    if (req.body && req.body._parts) {
+      const parsed = {};
+      req.body._parts.forEach(([k, v]) => {
+        if (typeof v === "string") parsed[k] = v.trim();
+      });
+      req.body = parsed;
+    }
 
-    // If image uploaded via multer
+    let imageUrl = null;
     if (req.file) {
       imageUrl = `${SERVER_URL}/uploads/parts/${req.file.filename}`;
     }
-    // If image passed as string (fallback)
-    else if (req.body.image) {
-      imageUrl = req.body.image;
-    }
 
-    // ---------- PAYLOAD ----------
-    const payload = {
-      name: req.body.name,
-      category: req.body.category,
-      bikeModel: req.body.bikeModel,
-
+    const item = await Inventory.create({
       owner: req.user._id,
-      image: imageUrl,
-
+      partName: req.body.partName,
+      bikeName: req.body.bikeName,
+      category: req.body.category || "General",
       quantity: Number(req.body.quantity || 0),
-      reservedQty: Number(req.body.reservedQty || 0),
       minThreshold: Number(req.body.minThreshold || 2),
       price: Number(req.body.price || 0),
-    };
-
-    const item = await Inventory.create(payload);
+      image: imageUrl,
+    });
 
     res.status(201).json(item);
   } catch (err) {
-    console.error("addItem error:", err);
+    console.error("addItem:", err);
     res.status(500).json({ message: err.message });
   }
 };
-/** Get paginated items for owner */
+
+/* ======================================================
+   GET OWNER INVENTORY
+====================================================== */
 exports.getItems = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     const q = { owner: req.user._id };
-
-    if (req.query.category) q.category = req.query.category;
-    if (req.query.bikeModel) q.bikeModel = req.query.bikeModel;
-    if (req.query.search) q.name = { $regex: req.query.search, $options: "i" };
-
-    const items = await Inventory.find(q)
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .sort({ createdAt: -1 });
-
-    const total = await Inventory.countDocuments(q);
-
-    res.json({ items, page, limit, total });
+    if (req.query.search) {
+      q.partName = { $regex: req.query.search, $options: "i" };
+    }
+    const items = await Inventory.find(q).sort({ createdAt: -1 });
+    res.json({ items });
   } catch (err) {
-    console.error("getItems error:", err);
+    console.error("getItems:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-/** Get single item (public) */
+/* ======================================================
+   GET SINGLE ITEM (public)
+====================================================== */
 exports.getItem = async (req, res) => {
   try {
-    const item = await Inventory.findById(req.params.id).populate("owner", "name phone");
-    if (!item) return res.status(404).json({ message: "Not found" });
+    const item = await Inventory.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: "Item not found" });
     res.json(item);
   } catch (err) {
-    console.error("getItem error:", err);
+    console.error("getItem:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-/** Update item (owner only) */
+/* ======================================================
+   UPDATE ITEM (OWNER)
+====================================================== */
 exports.updateItem = async (req, res) => {
   try {
     const item = await Inventory.findById(req.params.id);
-    if (!item) return res.status(404).json({ message: "Not found" });
-    if (item.owner.toString() !== req.user._id.toString()) return res.status(403).json({ message: "Forbidden" });
+    if (!item) return res.status(404).json({ message: "Item not found" });
+    if (item.owner.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: "Forbidden" });
 
-    const updates = { ...req.body };
-
-    // numeric normalization
-    if (updates.quantity !== undefined) updates.quantity = Number(updates.quantity);
-    if (updates.reservedQty !== undefined) updates.reservedQty = Number(updates.reservedQty);
-    if (updates.minThreshold !== undefined) updates.minThreshold = Number(updates.minThreshold);
-
-    // if (req.file?.filename) {
-    //   // remove previous file from disk (if it exists and is stored in uploads)
-    //   try {
-    //     const prev = item.image;
-    //     if (prev && prev.includes("/uploads/")) {
-    //       const filename = prev.split("/uploads/").pop();
-    //       const fp = path.join(UPLOAD_DIR, filename);
-    //       if (fs.existsSync(fp)) fs.unlinkSync(fp);
-    //     }
-    //   } catch (e) {
-    //     console.warn("Failed removing old image:", e.message);
-    //   }
-    //   updates.image = `${SERVER_URL}/uploads/${req.file.filename}`;
-    // }
-// ---------- when handling req.file in addItem / updateItem ----------
-// (in addItem you already used)
-// imageUrl = `${SERVER_URL}/uploads/parts/${req.file.filename}`
-
-// in updateItem: when a new file is uploaded, use the same pattern and
-// remove previous file robustly:
-
-if (req.file?.filename) {
-  // remove previous file from disk (if it exists and is stored in uploads)
-  try {
-    const prev = item.image;
-    if (prev && prev.includes("/uploads/")) {
-      // Get everything after '/uploads/' => could be 'parts/filename.jpg' or 'filename.jpg'
-      const rel = prev.split("/uploads/").pop();
-      const fp = path.join(UPLOAD_DIR, rel);
-      if (fs.existsSync(fp)) fs.unlinkSync(fp);
+    if (req.file?.filename) {
+      try {
+        if (item.image?.includes("/uploads/")) {
+          const rel = item.image.split("/uploads/").pop();
+          fs.unlinkSync(path.join(UPLOAD_DIR, rel));
+        }
+      } catch {}
+      item.image = `${SERVER_URL}/uploads/parts/${req.file.filename}`;
     }
-  } catch (e) {
-    console.warn("Failed removing old image:", e.message);
-  }
-  // save new file path in same uploads/parts subfolder
-  updates.image = `${SERVER_URL}/uploads/parts/${req.file.filename}`;
-}
-    const updated = await Inventory.findByIdAndUpdate(req.params.id, updates, { new: true });
-    res.json(updated);
+
+    if (req.body.partName !== undefined) item.partName = req.body.partName;
+    if (req.body.bikeName !== undefined) item.bikeName = req.body.bikeName;
+    if (req.body.category !== undefined) item.category = req.body.category;
+    if (req.body.quantity !== undefined) item.quantity = Number(req.body.quantity);
+    if (req.body.minThreshold !== undefined) item.minThreshold = Number(req.body.minThreshold);
+    if (req.body.price !== undefined) item.price = Number(req.body.price);
+
+    await item.save();
+    res.json(item);
   } catch (err) {
-    console.error("updateItem error:", err);
+    console.error("updateItem:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-/** Delete item */
-
-/** Delete item */
+/* ======================================================
+   DELETE ITEM
+====================================================== */
 exports.deleteItem = async (req, res) => {
   try {
     const item = await Inventory.findById(req.params.id);
     if (!item) return res.status(404).json({ message: "Item not found" });
-    if (item.owner.toString() !== req.user._id.toString()) return res.status(403).json({ message: "Forbidden" });
-    if (item.reservedQty > 0) return res.status(400).json({ message: "Cannot delete item. It is reserved in an active booking" });
+    if (item.owner.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: "Forbidden" });
+    if (item.reservedQty > 0)
+      return res.status(400).json({ message: "Item is reserved" });
 
-    // remove file if it's in uploads
     try {
-      const prev = item.image;
-      if (prev && prev.includes("/uploads/")) {
-        const filename = prev.split("/uploads/").pop();
-        const fp = path.join(UPLOAD_DIR, filename);
-        if (fs.existsSync(fp)) fs.unlinkSync(fp);
+      if (item.image?.includes("/uploads/")) {
+        const rel = item.image.split("/uploads/").pop();
+        fs.unlinkSync(path.join(UPLOAD_DIR, rel));
       }
-    } catch (e) {
-      console.warn("Failed removing file during delete:", e.message);
-    }
+    } catch {}
 
     await item.deleteOne();
-    res.json({ message: "Item deleted successfully" });
+    res.json({ message: "Item deleted" });
   } catch (err) {
-    console.error("deleteItem error:", err);
+    console.error("deleteItem:", err);
     res.status(500).json({ message: err.message });
   }
 };
-/** Restock (increase quantity) */
+
+/* ======================================================
+   RESTOCK ITEM
+====================================================== */
 exports.restock = async (req, res) => {
   try {
-    const { qty } = req.body;
-    if (!Number.isInteger(qty) || qty <= 0) return res.status(400).json({ message: "Invalid qty" });
+    const qty = Number(req.body.qty);
+    if (!qty || qty <= 0) return res.status(400).json({ message: "Invalid qty" });
 
     const item = await Inventory.findById(req.params.id);
-    if (!item) return res.status(404).json({ message: "Not found" });
-    if (item.owner.toString() !== req.user._id.toString()) return res.status(403).json({ message: "Forbidden" });
+    if (!item) return res.status(404).json({ message: "Item not found" });
+    if (item.owner.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: "Forbidden" });
 
     item.quantity += qty;
     await item.save();
-
     res.json(item);
   } catch (err) {
-    console.error("restock error:", err);
+    console.error("restock:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-/**
- * Reserve items for booking (owner) - uses atomic findOneAndUpdate to avoid race condition
- * Body: { itemId, qty }
- */
+/* ======================================================
+   RESERVE PART (OWNER)
+====================================================== */
 exports.reserveForBooking = async (req, res) => {
   try {
     const { itemId, qty } = req.body;
-    if (!itemId || !qty || qty <= 0) return res.status(400).json({ message: "Invalid payload" });
-
-    // atomic: ensure available >= qty then increment reservedQty
     const item = await Inventory.findOneAndUpdate(
       {
         _id: itemId,
-        $expr: { $gte: [{ $subtract: ["$quantity", "$reservedQty"] }, qty] },
         owner: req.user._id,
+        $expr: { $gte: [{ $subtract: ["$quantity", "$reservedQty"] }, qty] },
       },
       { $inc: { reservedQty: qty } },
       { new: true }
     );
 
-    if (!item) {
-      // find available amount for better message
-      const maybe = await Inventory.findById(itemId);
-      const available = maybe ? Math.max(0, maybe.quantity - maybe.reservedQty) : 0;
-      return res.status(400).json({ message: "Not enough stock", available });
-    }
+    if (!item) return res.status(400).json({ message: "Insufficient stock" });
 
-    res.json({ message: "Reserved", item });
+    res.json(item);
   } catch (err) {
-    console.error("reserveForBooking error:", err);
+    console.error("reserve:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-/** Unreserve (owner) */
+/* ======================================================
+   UNRESERVE PART (OWNER)
+====================================================== */
 exports.unreserve = async (req, res) => {
   try {
     const { itemId, qty } = req.body;
-    if (!itemId) return res.status(400).json({ message: "Invalid payload" });
-
-    const dec = Number.isInteger(qty) && qty > 0 ? qty : 0;
-
     const item = await Inventory.findById(itemId);
     if (!item) return res.status(404).json({ message: "Item not found" });
-    if (item.owner.toString() !== req.user._id.toString()) return res.status(403).json({ message: "Forbidden" });
 
-    item.reservedQty = Math.max(0, item.reservedQty - dec);
+    // ✅ ensure item belongs to owner
+    if (item.owner.toString() !== req.user._id.toString())
+      return res.status(403).json({ message: "Not your item" });
+
+    item.reservedQty = Math.max(0, item.reservedQty - Number(qty || 0));
     await item.save();
 
-    res.json({ message: "Unreserved", item });
+    res.json(item);
   } catch (err) {
-    console.error("unreserve error:", err);
+    console.error("unreserve:", err);
     res.status(500).json({ message: err.message });
   }
 };
 
-/** Low stock list (owner) */
+/* ======================================================
+   LOW STOCK ALERT
+====================================================== */
 exports.lowStock = async (req, res) => {
   try {
     const items = await Inventory.find({
       owner: req.user._id,
-      $expr: { $lte: [{ $subtract: ["$quantity", "$reservedQty"] }, "$minThreshold"] },
+      $expr: {
+        $lte: [{ $subtract: ["$quantity", "$reservedQty"] }, "$minThreshold"],
+      },
     });
     res.json(items);
   } catch (err) {
-    console.error("lowStock error:", err);
+    console.error("lowStock:", err);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+/* ======================================================
+   MECHANIC → VIEW GARAGE INVENTORY
+====================================================== */
+exports.getGarageInventoryForMechanic = async (req, res) => {
+  try {
+    const mechanic = await Mechanic.findOne({ user: req.user._id });
+    if (!mechanic) return res.status(404).json({ message: "Mechanic not linked" });
+
+    const items = await Inventory.find({ owner: mechanic.owner })
+      .select("partName bikeName category quantity reservedQty price image minThreshold")
+      .sort({ createdAt: -1 });
+
+    res.json(items);
+  } catch (err) {
+    console.error("getGarageInventoryForMechanic:", err);
     res.status(500).json({ message: err.message });
   }
 };

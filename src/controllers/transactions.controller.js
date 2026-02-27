@@ -2,9 +2,7 @@ const FakeTransaction = require("../models/FakeTransaction");
 
 exports.ownerTransactions = async (req, res) => {
   try {
-    const transactions = await FakeTransaction.find({
-      owner: req.user._id,
-    })
+    const transactions = await FakeTransaction.find({ owner: req.user._id })
       .populate("user", "name email")
       .populate({
         path: "booking",
@@ -14,6 +12,7 @@ exports.ownerTransactions = async (req, res) => {
 
     res.json(transactions);
   } catch (err) {
+    console.error("ownerTransactions error:", err);
     res.status(500).json({ message: err.message });
   }
 };
