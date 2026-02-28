@@ -52,9 +52,11 @@ app.use("/api/auth", require("./routes/auth.routes"));
 app.use("/api/services", require("./routes/services.routes"));
 app.use("/api/bookings", require("./routes/bookings.routes"));
 app.use("/api/coupons", require("./routes/coupon.routes"));
-app.use("/api/fake-payment", require("./routes/fakePayment.routes"));
+app.use("/api/payment", require("./routes/fakePayment.routes"));
+// const fakePaymentRoutes = require("./routes/fakePayment.routes");
 app.use("/api/transactions", require("./routes/transactions.routes"));
 app.use("/api/mechanics", require("./routes/mechanics.routes"));
+// app.use("/api/mechanic-requests", require("./routes/mechanicRequest.routes"));
 app.use("/api/mechanic-requests", require("./routes/mechanicRequest.routes"));
 /* ======================================================
    404 HANDLER
