@@ -11,7 +11,7 @@ const {
 } = require("../controllers/mechanics.controller"); // or "../controllers/mechanicRequest.controller"
 
 // Mechanic: view all garages
-router.get("/garages", auth, role("mechanic"), listGarages);
+router.get("/garages",   listGarages);
 
 // Mechanic: apply to a garage
 router.post("/apply", auth, role("mechanic"), applyToGarage);

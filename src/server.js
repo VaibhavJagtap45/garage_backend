@@ -30,21 +30,22 @@ const startServer = async () => {
 
   // For local development with mobile: 0.0.0.0
   // For production (Railway, Heroku) use app.listen(PORT)
-  app.listen(PORT, "0.0.0.0", () => {
+  // app.listen(PORT, "0.0.0.0", () => {
+    app.listen(PORT, () => {
     console.log("=================================");
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`💻 Localhost: http://localhost:${PORT}`);
     // Dynamically determine local IP for mobile testing (optional)
-    const { networkInterfaces } = require("os");
-    const nets = networkInterfaces();
-    for (const name of Object.keys(nets)) {
-      for (const net of nets[name]) {
-        if (net.family === "IPv4" && !net.internal) {
-          console.log(`📱 Mobile access: http://${net.address}:${PORT}`);
-          break;
-        }
-      }
-    }
+    // const { networkInterfaces } = require("os");
+    // const nets = networkInterfaces();
+    // for (const name of Object.keys(nets)) {
+    //   for (const net of nets[name]) {
+    //     if (net.family === "IPv4" && !net.internal) {
+    //       console.log(`📱 Mobile access: http://${net.address}:${PORT}`);
+    //       break;
+    //     }
+    //   }
+    // }
     console.log("=================================");
   });
 };

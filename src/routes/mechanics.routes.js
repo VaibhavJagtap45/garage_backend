@@ -4,7 +4,7 @@ const router = express.Router();
 const auth = require("../middlewares/auth.middleware");
 const role = require("../middlewares/role.middleware");
 // ❌ Removed unused uploadForm import
-
+const mechanicController = require("../controllers/mechanics.controller");
 const {
   addMechanic,
   getMechanics,
@@ -19,6 +19,7 @@ const {
   mechanicStartJob,
   mechanicCompleteJob,
   getMyHistory,
+  myGarageStatus
   // ❌ Removed getMyJobs import
 } = require("../controllers/mechanics.controller");
 
@@ -39,5 +40,5 @@ router.put("/me/complete/:bookingId", auth, role("mechanic"), mechanicCompleteJo
 router.get("/me/history", auth, role("mechanic"), getMyHistory);
 /* ----------------- CUSTOMER / PUBLIC ----------------- */
 router.get("/by-booking/:bookingId", auth, getMechanicByBooking);
-
+router.get("/my-garage", auth, role("mechanic"), mechanicController.myGarageStatus);
 module.exports = router;

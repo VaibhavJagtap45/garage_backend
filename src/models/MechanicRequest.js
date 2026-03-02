@@ -9,13 +9,17 @@ const mechanicRequestSchema = new mongoose.Schema(
       enum: ["pending", "approved", "rejected"],
       default: "pending",
     },
-    message: String, // optional message from mechanic
+    message: {type: String}, // optional message from mechanic
     respondedAt: Date,
   },
   { timestamps: true }
 );
 
 // Ensure a mechanic can only request once per owner
-mechanicRequestSchema.index({ mechanic: 1, owner: 1 }, { unique: true });
+// Only one pending per mechanic-owner pair
+mechanicRequestSchema.index(
+  { mechanic: 1, owner: 1 },
+  { unique: true, partialFilterExpression: { status: "pending" } }
+);
 
 module.exports = mongoose.model("MechanicRequest", mechanicRequestSchema);

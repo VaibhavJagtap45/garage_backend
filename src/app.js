@@ -55,9 +55,8 @@ app.use("/api/coupons", require("./routes/coupon.routes"));
 app.use("/api/payment", require("./routes/fakePayment.routes"));
 // const fakePaymentRoutes = require("./routes/fakePayment.routes");
 app.use("/api/transactions", require("./routes/transactions.routes"));
-app.use("/api/mechanics", require("./routes/mechanics.routes"));
-// app.use("/api/mechanic-requests", require("./routes/mechanicRequest.routes"));
 app.use("/api/mechanic-requests", require("./routes/mechanicRequest.routes"));
+app.use("/api/mechanics", require("./routes/mechanics.routes"));
 /* ======================================================
    404 HANDLER
 ====================================================== */
